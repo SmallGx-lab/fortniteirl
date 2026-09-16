@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Fortnite IRL — Peñaflor</title>
+
+  <!-- Leaflet -->
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"
+  >
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      font-family: Arial, sans-serif;
+      background: #111;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* PANEL */
+
+    .panel {
+      position: fixed;
+      z-index: 1000;
+      top: 12px;
+      left: 12px;
+      right: 12px;
+      max-width: 430px;
+      margin: auto;
+
+      background: rgba(15, 15, 20, 0.94);
+      color: white;
+
+      border: 2px solid #00d9ff;
+      border-radius: 15px;
+
+      padding: 14px;
+
+      box-shadow: 0 5px 25px rgba(0,0,0,.6);
+    }
+
+    .title {
+      font-size: 22px;
+      font-weight: 900;
+      margin-bottom: 10px;
+    }
+
+    .subtitle {
+      font-size: 12px;
+      color: #aaa;
+      margin-bottom: 10px;
+    }
+
+    .status {
+      background: #222;
+      padding: 9px;
+      border-radius: 9px;
+      margin-top: 7px;
+      font-size: 14px;
+    }
+
+    .green {
+      color: #55ff77;
+    }
+
+    .red {
+      color: #ff5555;
+    }
+
+    button {
+      width: 100%;
+      margin-top: 8px;
+      padding: 12px;
+
+      border: 0;
+      border-radius: 9px;
+
+      font-size: 15px;
+      font-weight: bold;
+
+      background: #168cff;
+      color: white;
+    }
+
+    button:active {
+      transform: scale(.98);
+    }
+
+    /* MARCADOR DEL JUGADOR */
+
+    .player-marker {
+      width: 22px;
+      height: 22px;
+
+      background: #168cff;
+
+      border: 4px solid white;
+      border-radius: 50%;
+
+      box-shadow:
+        0 0 8px #168cff,
+        0 0 20px #168cff;
+    }
+
+    /* BASE */
+
+    .base-marker {
+      width: 28px;
+      height: 28px;
+
+      background: #00d9ff;
+
+      border: 3px solid white;
+      border-radius: 50%;
+
+      box-shadow: 0 0 15px #00d9ff;
+    }
+
+    /* BOSS */
+
+    .boss-marker {
+      width: 32px;
+      height: 32px;
+
+      background: #a000ff;
+
+      border: 3px solid white;
+      border-radius: 50%;
+
+      box-shadow: 0 0 20px #a000ff;
+    }
+
+    /* LEYENDA */
+
+    .legend {
+      position: fixed;
+      z-index: 1000;
+      bottom: 15px;
+      left: 15px;
+
+      background: rgba(15,15,20,.9);
+      color: white;
+
+      padding: 10px;
+      border-radius: 10px;
+
+      font-size: 13px;
+    }
+
+    .legend div {
+      margin: 4px 0;
+    }
+
+  </style>
+</head>
+
+<body>
+
+<!-- ============================= -->
+<!-- PANEL -->
+<!-- ============================= -->
+
+<div class="panel">
+
+  <div class="title">
+    🎮 FORTNITE IRL
+  </div>
+
+  <div class="subtitle">
+    PEÑAFLOR • MODO DÚO
+  </div>
+
+  <div class="status">
+    📡 GPS:
+    <strong id="gpsStatus" class="red">
+      Desactivado
+    </strong>
+  </div>
+
+  <div class="status">
+    📏 Distancia desde BASE:
+    <strong id="distance">
+      —
+    </strong>
+  </div>
+
+  <div class="status">
+    ⭕ Zona:
+    <strong id="zone">
+      Esperando GPS...
+    </strong>
+  </div>
+
+  <div class="status">
+    🎯 Precisión GPS:
+    <strong id="accuracy">
+      —
+    </strong>
+  </div>
+
+  <button onclick="startGPS()">
+    📡 ACTIVAR GPS
+  </button>
+
+  <button onclick="centerPlayer()">
+    🎯 CENTRAR EN MÍ
+  </button>
+
+</div>
+
+<!-- MAPA -->
+
+<div id="map"></div>
+
+<!-- LEYENDA -->
+
+<div class="legend">
+
+  <div>🔵 Tú</div>
+  <div>🚌 BASE</div>
+  <div>🟣 BOSS — LAS PALMERAS</div>
+  <div>⭕ Radio aproximado: 500 m</div>
+
+</div>
+
+
+<!-- ============================= -->
+<!-- LEAFLET -->
+<!-- ============================= -->
+
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+
+
+<script>
+
+  /*
+   * ==========================================
+   * CONFIGURACIÓN
+   * ==========================================
+   *
+   * Estas coordenadas son aproximadas.
+   *
+   * Si quieres ajustar exactamente el punto
+   * de Fresia 4105, puedes cambiar BASE_LAT
+   * y BASE_LNG.
+   */
+
+  const BASE_LAT = -33.6160;
+  const BASE_LNG = -70.9160;
+
+  const RADIO = 500;
+
+
+  /*
+   * ==========================================
+   * MAPA
+   * ==========================================
+   */
+
+  const map = L.map("map").setView(
+    [BASE_LAT, BASE_LNG],
+    16
+  );
+
+
+  /*
+   * OpenStreetMap
+   */
+
+  L.tileLayer(
+    "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    {
+      maxZoom: 20,
+
+      attribution:
+        '&copy; OpenStreetMap contributors'
+    }
+  ).addTo(map);
+
+
+  /*
+   * ==========================================
+   * ICONO BASE
+   * ==========================================
+   */
+
+  const baseIcon = L.divIcon({
+
+    className: "",
+
+    html:
+      '<div class="base-marker"></div>',
+
+    iconSize: [28, 28],
+
+    iconAnchor: [14, 14]
+
+  });
+
+
+  /*
+   * BASE
+   */
+
+  const baseMarker = L.marker(
+    [BASE_LAT, BASE_LNG],
+    {
+      icon: baseIcon
+    }
+  ).addTo(map);
+
+
+  baseMarker.bindPopup(`
+    <b>🚌 BASE</b><br>
+    Fresia 4105<br>
+    <br>
+    Punto de inicio y extracción.
+  `);
+
+
+  /*
+   * ==========================================
+   * RADIO 500 METROS
+   * ==========================================
+   */
+
+  const safeZone = L.circle(
+
+    [BASE_LAT, BASE_LNG],
+
+    {
+      radius: RADIO,
+
+      color: "#00d9ff",
+
+      fillColor: "#00d9ff",
+
+      fillOpacity: 0.08,
+
+      weight: 2
+    }
+
+  ).addTo(map);
+
+
+  /*
+   * ==========================================
+   * BOSS ZONE
+   * ==========================================
+   *
+   * Coordenada aproximada.
+   *
+   * Puedes cambiarla cuando tengamos
+   * la posición exacta.
+   */
+
+  const BOSS_LAT = BASE_LAT - 0.0012;
+  const BOSS_LNG = BASE_LNG + 0.0005;
+
+
+  const bossIcon = L.divIcon({
+
+    className: "",
+
+    html:
+      '<div class="boss-marker"></div>',
+
+    iconSize: [32, 32],
+
+    iconAnchor: [16, 16]
+
+  });
+
+
+  const bossMarker = L.marker(
+
+    [BOSS_LAT, BOSS_LNG],
+
+    {
+      icon: bossIcon
+    }
+
+  ).addTo(map);
+
+
+  bossMarker.bindPopup(`
+
+    <b>🌴 LAS PALMERAS</b><br>
+
+    🔴 BOSS ZONE<br><br>
+
+    <b>Bossfight:</b><br>
+
+    Completa el desafío y vuelve
+    a la BASE.
+
+  `);
+
+
+  /*
+   * ==========================================
+   * VARIABLES GPS
+   * ==========================================
+   */
+
+  let playerMarker = null;
+
+  let accuracyCircle = null;
+
+  let gpsWatch = null;
+
+
+  /*
+   * ==========================================
+   * ACTIVAR GPS
+   * ==========================================
+   */
+
+  function startGPS() {
+
+    if (!navigator.geolocation) {
+
+      alert(
+        "Tu navegador no permite utilizar GPS."
+      );
+
+      return;
+    }
+
+
+    document.getElementById(
+      "gpsStatus"
+    ).textContent = "Buscando señal...";
+
+
+    document.getElementById(
+      "gpsStatus"
+    ).className = "green";
+
+
+    gpsWatch =
+      navigator.geolocation.watchPosition(
+
+        updatePosition,
+
+        gpsError,
+
+        {
+
+          enableHighAccuracy: true,
+
+          maximumAge: 2000,
+
+          timeout: 15000
+
+        }
+
+      );
+
+  }
+
+
+  /*
+   * ==========================================
+   * ACTUALIZAR POSICIÓN
+   * ==========================================
+   */
+
+  function updatePosition(position) {
+
+    const lat =
+      position.coords.latitude;
+
+    const lng =
+      position.coords.longitude;
+
+    const accuracy =
+      position.coords.accuracy;
+
+
+    /*
+     * ICONO DEL JUGADOR
+     */
+
+    const playerIcon =
+      L.divIcon({
+
+        className: "",
+
+        html:
+          '<div class="player-marker"></div>',
+
+        iconSize: [22, 22],
+
+        iconAnchor: [11, 11]
+
+      });
+
+
+    /*
+     * CREAR / MOVER JUGADOR
+     */
+
+    if (!playerMarker) {
+
+      playerMarker =
+        L.marker(
+
+          [lat, lng],
+
+          {
+            icon: playerIcon
+          }
+
+        ).addTo(map);
+
+
+      playerMarker.bindPopup(
+        "🔵 <b>TÚ</b>"
+      );
+
+    }
+
+    else {
+
+      playerMarker.setLatLng(
+        [lat, lng]
+      );
+
+    }
+
+
+    /*
+     * ==========================================
+     * PRECISIÓN GPS
+     * ==========================================
+     */
+
+    if (!accuracyCircle) {
+
+      accuracyCircle =
+        L.circle(
+
+          [lat, lng],
+
+          {
+
+            radius: accuracy,
+
+            color: "#168cff",
+
+            fillColor: "#168cff",
+
+            fillOpacity: 0.08
+
+          }
+
+        ).addTo(map);
+
+    }
+
+    else {
+
+      accuracyCircle.setLatLng(
+        [lat, lng]
+      );
+
+      accuracyCircle.setRadius(
+        accuracy
+      );
+
+    }
+
+
+    /*
+     * ==========================================
+     * DISTANCIA A LA BASE
+     * ==========================================
+     */
+
+    const distance =
+      map.distance(
+
+        [lat, lng],
+
+        [BASE_LAT, BASE_LNG]
+
+      );
+
+
+    document.getElementById(
+      "distance"
+    ).textContent =
+      Math.round(distance) + " m";
+
+
+    /*
+     * PRECISIÓN
+     */
+
+    document.getElementById(
+      "accuracy"
+    ).textContent =
+      Math.round(accuracy) + " m";
+
+
+    /*
+     * ==========================================
+     * ZONA
+     * ==========================================
+     */
+
+    const zone =
+      document.getElementById("zone");
+
+
+    if (distance <= 500) {
+
+      zone.textContent =
+        "🟢 DENTRO DE LA ZONA";
+
+    }
+
+    else {
+
+      zone.textContent =
+        "🔴 FUERA DE LA ZONA";
+
+    }
+
+  }
+
+
+  /*
+   * ==========================================
+   * ERROR GPS
+   * ==========================================
+   */
+
+  function gpsError(error) {
+
+    const status =
+      document.getElementById(
+        "gpsStatus"
+      );
+
+
+    status.textContent =
+      "Error GPS";
+
+
+    status.className =
+      "red";
+
+
+    console.log(
+      "GPS error:",
+      error
+    );
+
+  }
+
+
+  /*
+   * ==========================================
+   * CENTRAR EN EL JUGADOR
+   * ==========================================
+   */
+
+  function centerPlayer() {
+
+    if (!playerMarker) {
+
+      alert(
+        "Primero activa el GPS."
+      );
+
+      return;
+
+    }
+
+
+    map.setView(
+
+      playerMarker.getLatLng(),
+
+      18
+
+    );
+
+  }
+
+</script>
+
+</body>
+</html>
